@@ -1,0 +1,22 @@
+# Rust
+target/
+**/target/
+
+# Environment
+.env
+**/.env
+
+# SQLx
+.sqlx
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# IntelliJ
+.idea/
+
+# Logs
+*.log
