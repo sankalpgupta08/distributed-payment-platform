@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{error::Error, fmt};
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -34,6 +34,31 @@ impl fmt::Display for PaymentStatus {
     }
 }
 
+#[derive(Debug)]
+pub struct PaymentStatusParseError(String);
+
+impl fmt::Display for PaymentStatusParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "unknown payment status: {}", self.0)
+    }
+}
+
+impl Error for PaymentStatusParseError {}
+
+impl TryFrom<&str> for PaymentStatus {
+    type Error = PaymentStatusParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "processing" => Ok(Self::Processing),
+            "succeeded" => Ok(Self::Succeeded),
+            "failed" => Ok(Self::Failed),
+            _ => Err(PaymentStatusParseError(value.to_owned())),
+        }
+    }
+}
+
 /// The durable payment record represented by the `payments` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Payment {
@@ -44,4 +69,32 @@ pub struct Payment {
     pub status: PaymentStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// Data required to insert a newly-created payment.
+#[derive(Debug, Clone)]
+pub struct NewPayment {
+    pub id: Uuid,
+    pub merchant_id: Uuid,
+    pub amount: Decimal,
+    pub currency: String,
+    pub status: PaymentStatus,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PaymentStatus;
+
+    #[test]
+    fn parses_known_database_status() {
+        assert_eq!(
+            PaymentStatus::try_from("succeeded").unwrap(),
+            PaymentStatus::Succeeded
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_database_status() {
+        assert!(PaymentStatus::try_from("cancelled").is_err());
+    }
 }

@@ -1,5 +1,12 @@
 use std::{error::Error, fmt};
 
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use serde::Serialize;
+
 /// Errors encountered while reading startup configuration.
 #[derive(Debug)]
 pub enum ConfigError {
@@ -21,3 +28,50 @@ impl fmt::Display for ConfigError {
 }
 
 impl Error for ConfigError {}
+
+/// An application failure that can be safely translated into an HTTP response.
+#[derive(Debug)]
+pub enum AppError {
+    BadRequest(String),
+    NotFound(String),
+    Internal,
+}
+
+impl AppError {
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest(message.into())
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound(message.into())
+    }
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(error: sqlx::Error) -> Self {
+        eprintln!("database operation failed: {error}");
+        Self::Internal
+    }
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: &'static str,
+    message: String,
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, error, message) = match self {
+            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, "bad_request", message),
+            Self::NotFound(message) => (StatusCode::NOT_FOUND, "not_found", message),
+            Self::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_server_error",
+                "an unexpected error occurred".to_owned(),
+            ),
+        };
+
+        (status, Json(ErrorResponse { error, message })).into_response()
+    }
+}
