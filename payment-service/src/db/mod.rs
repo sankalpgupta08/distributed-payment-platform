@@ -1,6 +1,6 @@
 //! Database boundary for the Payment Service.
 //!
-//! The connection pool and SQLx repositories are intentionally introduced in
-//! Phase 3, keeping this architecture phase free of persistence concerns.
+//! Phase 3 owns connection-pool setup. SQLx repositories are added when payment
+//! persistence begins in Phase 5.
 
 pub mod connection;

@@ -5,6 +5,7 @@ use std::{error::Error, fmt};
 pub enum ConfigError {
     InvalidServerPort,
     InvalidServerAddress,
+    MissingDatabaseUrl,
 }
 
 impl fmt::Display for ConfigError {
@@ -14,6 +15,7 @@ impl fmt::Display for ConfigError {
             Self::InvalidServerAddress => {
                 formatter.write_str("SERVER_HOST and SERVER_PORT must form a valid socket address")
             }
+            Self::MissingDatabaseUrl => formatter.write_str("DATABASE_URL must be set"),
         }
     }
 }
