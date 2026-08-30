@@ -13,6 +13,8 @@ pub enum ConfigError {
     InvalidServerPort,
     InvalidServerAddress,
     MissingDatabaseUrl,
+    MissingRedisUrl,
+    InvalidPositiveInteger(&'static str),
 }
 
 impl fmt::Display for ConfigError {
@@ -23,6 +25,10 @@ impl fmt::Display for ConfigError {
                 formatter.write_str("SERVER_HOST and SERVER_PORT must form a valid socket address")
             }
             Self::MissingDatabaseUrl => formatter.write_str("DATABASE_URL must be set"),
+            Self::MissingRedisUrl => formatter.write_str("REDIS_URL must be set"),
+            Self::InvalidPositiveInteger(variable) => {
+                write!(formatter, "{variable} must be a positive integer")
+            }
         }
     }
 }
@@ -54,7 +60,14 @@ impl AppError {
 
 impl From<sqlx::Error> for AppError {
     fn from(error: sqlx::Error) -> Self {
-        eprintln!("database operation failed: {error}");
+        tracing::error!(error = %error, "database operation failed");
+        Self::Internal
+    }
+}
+
+impl From<redis::RedisError> for AppError {
+    fn from(error: redis::RedisError) -> Self {
+        tracing::error!(error = %error, "Redis operation failed");
         Self::Internal
     }
 }

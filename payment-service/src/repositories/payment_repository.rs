@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::models::payment::{NewPayment, Payment, PaymentStatus};
@@ -55,6 +55,29 @@ pub async fn create(pool: &PgPool, payment: NewPayment) -> Result<Payment, sqlx:
     row.try_into()
 }
 
+/// Inserts a payment as part of a larger atomic workflow.
+pub async fn create_in_transaction(
+    transaction: &mut Transaction<'_, Postgres>,
+    payment: NewPayment,
+) -> Result<Payment, sqlx::Error> {
+    let row = sqlx::query_as::<_, PaymentRow>(
+        r#"
+        INSERT INTO payments (id, merchant_id, amount, currency, status)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, merchant_id, amount, currency, status, created_at, updated_at
+        "#,
+    )
+    .bind(payment.id)
+    .bind(payment.merchant_id)
+    .bind(payment.amount)
+    .bind(payment.currency)
+    .bind(payment.status.as_str())
+    .fetch_one(&mut **transaction)
+    .await?;
+
+    row.try_into()
+}
+
 /// Finds one payment by its stable public identifier.
 pub async fn find_by_id(pool: &PgPool, payment_id: Uuid) -> Result<Option<Payment>, sqlx::Error> {
     let row = sqlx::query_as::<_, PaymentRow>(
@@ -71,12 +94,32 @@ pub async fn find_by_id(pool: &PgPool, payment_id: Uuid) -> Result<Option<Paymen
     row.map(TryInto::try_into).transpose()
 }
 
+/// Reads and locks one payment row until the surrounding transaction finishes.
+pub async fn find_by_id_for_update(
+    transaction: &mut Transaction<'_, Postgres>,
+    payment_id: Uuid,
+) -> Result<Option<Payment>, sqlx::Error> {
+    let row = sqlx::query_as::<_, PaymentRow>(
+        r#"
+        SELECT id, merchant_id, amount, currency, status, created_at, updated_at
+        FROM payments
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(payment_id)
+    .fetch_optional(&mut **transaction)
+    .await?;
+
+    row.map(TryInto::try_into).transpose()
+}
+
 /// Updates a payment only when its database state still matches `expected_status`.
 ///
 /// The expected-state condition prevents a concurrent request from overwriting
 /// a transition that completed after the service initially read the payment.
 pub async fn update_status(
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
     payment_id: Uuid,
     expected_status: PaymentStatus,
     next_status: PaymentStatus,
@@ -92,7 +135,7 @@ pub async fn update_status(
     .bind(payment_id)
     .bind(expected_status.as_str())
     .bind(next_status.as_str())
-    .fetch_optional(pool)
+    .fetch_optional(&mut **transaction)
     .await?;
 
     row.map(TryInto::try_into).transpose()

@@ -19,5 +19,39 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: payment-service-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  payment-service:
+    build:
+      context: .
+    container_name: payment-service-api
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 3000
+      DATABASE_URL: postgres://payment_user:payment_password@postgres:5432/payment_db
+      DATABASE_MAX_CONNECTIONS: 10
+      REDIS_URL: redis://redis:6379
+      REDIS_LOCK_TTL_SECONDS: 30
+      IDEMPOTENCY_TTL_SECONDS: 86400
+      REQUEST_TIMEOUT_SECONDS: 10
+      MAX_REQUEST_BODY_BYTES: 16384
+      RUST_LOG: payment_service=info,tower_http=info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:

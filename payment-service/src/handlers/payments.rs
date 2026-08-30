@@ -4,6 +4,7 @@ use axum::{
         Path, State,
         rejection::{JsonRejection, PathRejection},
     },
+    http::HeaderMap,
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -21,13 +22,27 @@ use crate::{
 /// Creates a durable payment record with an initial `pending` status.
 pub async fn create_payment(
     State(state): State<AppState>,
+    headers: HeaderMap,
     payload: Result<Json<CreatePaymentRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Payment>), AppError> {
     let Json(request) =
         payload.map_err(|rejection| AppError::bad_request(rejection.body_text()))?;
-    let payment = payment_service::create_payment(&state.db, request).await?;
+    let idempotency_key = headers
+        .get("Idempotency-Key")
+        .ok_or_else(|| AppError::bad_request("Idempotency-Key header is required"))?
+        .to_str()
+        .map_err(|_| AppError::bad_request("Idempotency-Key must be valid UTF-8"))?;
+    let result = payment_service::create_payment(
+        &state.db,
+        &state.redis_locks,
+        state.config.idempotency_ttl,
+        idempotency_key,
+        request,
+    )
+    .await?;
+    let status_code = StatusCode::from_u16(result.status_code).map_err(|_| AppError::Internal)?;
 
-    Ok((StatusCode::CREATED, Json(payment)))
+    Ok((status_code, Json(result.payment)))
 }
 
 /// Returns the current persisted state of one payment.

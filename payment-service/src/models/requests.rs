@@ -1,5 +1,6 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
 };
 
 /// JSON accepted by `POST /payments`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreatePaymentRequest {
     pub merchant_id: Uuid,
     pub amount: Decimal,
@@ -22,6 +23,18 @@ pub struct UpdatePaymentStatusRequest {
 }
 
 impl CreatePaymentRequest {
+    /// Produces a stable fingerprint used to detect unsafe idempotency-key reuse.
+    pub fn request_hash(&self) -> String {
+        let canonical_request = format!(
+            "{}|{}|{}",
+            self.merchant_id,
+            self.amount.normalize(),
+            self.currency
+        );
+
+        hex::encode(Sha256::digest(canonical_request.as_bytes()))
+    }
+
     /// Validates client-controlled fields before any database query is made.
     pub fn into_new_payment(self, id: Uuid) -> Result<NewPayment, AppError> {
         if self.amount <= Decimal::ZERO {

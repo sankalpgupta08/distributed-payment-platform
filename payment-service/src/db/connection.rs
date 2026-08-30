@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
-const MAX_DATABASE_CONNECTIONS: u32 = 10;
 const MIN_DATABASE_CONNECTIONS: u32 = 1;
 const CONNECTION_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -10,9 +9,9 @@ const CONNECTION_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
 ///
 /// `connect` opens an initial connection, so startup fails immediately if the
 /// configured database is unavailable or the connection string is invalid.
-pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
+pub async fn create_pool(database_url: &str, max_connections: u32) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
-        .max_connections(MAX_DATABASE_CONNECTIONS)
+        .max_connections(max_connections)
         .min_connections(MIN_DATABASE_CONNECTIONS)
         .acquire_timeout(CONNECTION_ACQUIRE_TIMEOUT)
         .connect(database_url)
