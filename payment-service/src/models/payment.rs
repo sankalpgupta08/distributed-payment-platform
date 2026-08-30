@@ -26,6 +26,14 @@ impl PaymentStatus {
             Self::Failed => "failed",
         }
     }
+
+    /// Returns whether one lifecycle state may move directly to another.
+    pub const fn can_transition_to(self, next: Self) -> bool {
+        matches!(
+            (self, next),
+            (Self::Pending, Self::Processing) | (Self::Processing, Self::Succeeded | Self::Failed)
+        )
+    }
 }
 
 impl fmt::Display for PaymentStatus {
@@ -96,5 +104,16 @@ mod tests {
     #[test]
     fn rejects_unknown_database_status() {
         assert!(PaymentStatus::try_from("cancelled").is_err());
+    }
+
+    #[test]
+    fn permits_only_defined_lifecycle_transitions() {
+        assert!(PaymentStatus::Pending.can_transition_to(PaymentStatus::Processing));
+        assert!(PaymentStatus::Processing.can_transition_to(PaymentStatus::Succeeded));
+        assert!(PaymentStatus::Processing.can_transition_to(PaymentStatus::Failed));
+
+        assert!(!PaymentStatus::Pending.can_transition_to(PaymentStatus::Succeeded));
+        assert!(!PaymentStatus::Succeeded.can_transition_to(PaymentStatus::Failed));
+        assert!(!PaymentStatus::Failed.can_transition_to(PaymentStatus::Processing));
     }
 }

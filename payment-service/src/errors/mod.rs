@@ -34,6 +34,7 @@ impl Error for ConfigError {}
 pub enum AppError {
     BadRequest(String),
     NotFound(String),
+    Conflict(String),
     Internal,
 }
 
@@ -44,6 +45,10 @@ impl AppError {
 
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
+    }
+
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::Conflict(message.into())
     }
 }
 
@@ -65,6 +70,7 @@ impl IntoResponse for AppError {
         let (status, error, message) = match self {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, "bad_request", message),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "not_found", message),
+            Self::Conflict(message) => (StatusCode::CONFLICT, "conflict", message),
             Self::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "internal_server_error",

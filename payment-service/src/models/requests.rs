@@ -2,7 +2,10 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{errors::AppError, models::payment::NewPayment};
+use crate::{
+    errors::AppError,
+    models::payment::{NewPayment, PaymentStatus},
+};
 
 /// JSON accepted by `POST /payments`.
 #[derive(Debug, Deserialize)]
@@ -10,6 +13,12 @@ pub struct CreatePaymentRequest {
     pub merchant_id: Uuid,
     pub amount: Decimal,
     pub currency: String,
+}
+
+/// JSON accepted by `PATCH /payments/{id}/status`.
+#[derive(Debug, Deserialize)]
+pub struct UpdatePaymentStatusRequest {
+    pub status: PaymentStatus,
 }
 
 impl CreatePaymentRequest {

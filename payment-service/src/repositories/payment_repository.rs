@@ -70,3 +70,30 @@ pub async fn find_by_id(pool: &PgPool, payment_id: Uuid) -> Result<Option<Paymen
 
     row.map(TryInto::try_into).transpose()
 }
+
+/// Updates a payment only when its database state still matches `expected_status`.
+///
+/// The expected-state condition prevents a concurrent request from overwriting
+/// a transition that completed after the service initially read the payment.
+pub async fn update_status(
+    pool: &PgPool,
+    payment_id: Uuid,
+    expected_status: PaymentStatus,
+    next_status: PaymentStatus,
+) -> Result<Option<Payment>, sqlx::Error> {
+    let row = sqlx::query_as::<_, PaymentRow>(
+        r#"
+        UPDATE payments
+        SET status = $3
+        WHERE id = $1 AND status = $2
+        RETURNING id, merchant_id, amount, currency, status, created_at, updated_at
+        "#,
+    )
+    .bind(payment_id)
+    .bind(expected_status.as_str())
+    .bind(next_status.as_str())
+    .fetch_optional(pool)
+    .await?;
+
+    row.map(TryInto::try_into).transpose()
+}
